@@ -35,7 +35,7 @@ int nativeLoop(void) {
 	systray_ready();
 	gtk_main();
 	systray_on_exit();
-	return;
+	return 0;
 }
 
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
@@ -157,6 +157,7 @@ gboolean do_quit(gpointer data) {
 	}
 	// app indicator doesn't provide a way to remove it, hide it as a workaround
 	app_indicator_set_status(global_app_indicator, APP_INDICATOR_STATUS_PASSIVE);
+	gtk_main_quit();
 	return FALSE;
 }
 
