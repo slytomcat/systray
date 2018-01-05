@@ -61,13 +61,14 @@ func Run(onReady func(), onExit func()) {
 		systrayReady = func() {}
 	} else {
 		// Run onReady on separate goroutine to avoid blocking event loop
-		readyCh := make(chan interface{})
-		go func() {
-			<-readyCh
-			onReady()
-		}()
+		//readyCh := make(chan interface{})
+		//go func() {
+		//	<-readyCh
+		//	onReady()
+		//}()
 		systrayReady = func() {
-			close(readyCh)
+			//close(readyCh)
+			go onReady()
 		}
 	}
 
@@ -109,6 +110,11 @@ func AddSeparator() {
 func (item *MenuItem) SetTitle(title string) {
 	item.title = title
 	item.update()
+}
+
+// GetTitle returns the title of menu item
+func (item *MenuItem) GetTitle() string {
+	return item.title
 }
 
 // SetTooltip set the tooltip to show when mouse hover
