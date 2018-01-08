@@ -147,7 +147,7 @@ gboolean do_remove_submenu(gpointer data) {
   GtkWidget* menu_item = _get_menu_item(mii->menu_id);
   if(menu_item != NULL) {
     GtkWidget* submenu = gtk_menu_item_get_submenu(GTK_MENU_ITEM(menu_item));
-    if(submenu == NULL) {
+    if(submenu != NULL) {
       gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item), NULL);
     }
   }
