@@ -11,8 +11,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-
-	"github.com/getlantern/golog"
 )
 
 var (
@@ -24,7 +22,7 @@ var (
 // Don't create it directly, use the one systray.AddMenuItem() returned
 type MenuItem struct {
 	// ClickedCh is the channel which will be notified when the menu item is clicked
-	ClickedCh chan struct{}
+	ClickedCh chan string
 
 	// id uniquely identify a menu item, not supposed to be modified
 	id int32
@@ -36,11 +34,16 @@ type MenuItem struct {
 	disabled bool
 	// checked menu item has a tick before the title
 	checked bool
+	// submenu is the slice of submenu item titles
+	submenu []string
+}
+
+type SubmenuItem struct {
+	Title string
+	Disabled bool
 }
 
 var (
-	log = golog.LoggerFor("systray")
-
 	systrayReady  func()
 	systrayExit   func()
 	menuItems     = make(map[int32]*MenuItem)
@@ -61,13 +64,7 @@ func Run(onReady func(), onExit func()) {
 		systrayReady = func() {}
 	} else {
 		// Run onReady on separate goroutine to avoid blocking event loop
-		//readyCh := make(chan interface{})
-		//go func() {
-		//	<-readyCh
-		//	onReady()
-		//}()
 		systrayReady = func() {
-			//close(readyCh)
 			go onReady()
 		}
 	}
@@ -95,8 +92,8 @@ func Quit() {
 // It can be safely invoked from different goroutines.
 func AddMenuItem(title string, tooltip string) *MenuItem {
 	id := atomic.AddInt32(&currentID, 1)
-	item := &MenuItem{nil, id, title, tooltip, false, false}
-	item.ClickedCh = make(chan struct{})
+	item := &MenuItem{nil, id, title, tooltip, false, false, []string{}}
+	item.ClickedCh = make(chan string)
 	item.update()
 	return item
 }
@@ -104,6 +101,29 @@ func AddMenuItem(title string, tooltip string) *MenuItem {
 // AddSeparator adds a separator bar to the menu
 func AddSeparator() {
 	addSeparator(atomic.AddInt32(&currentID, 1))
+}
+
+func (item *MenuItem) AddSubmenu(items []SubmenuItem) {
+	for i, it := range items {
+		addSubmenuItem(item.id, int32(i), &it)
+		item.submenu = append(item.submenu, it.Title)
+	}
+}
+
+func (item *MenuItem) RemoveSubmenu() {
+	removeSubmenu(item.id)
+	item.submenu = []string{}
+	}
+
+func submenuItemSelected(parentId, id int32) {
+	menuItemsLock.RLock()
+	item := menuItems[parentId]
+	menuItemsLock.RUnlock()
+	select {
+	case item.ClickedCh <- item.submenu[id]:
+	// in case no one waiting for the channel
+	default:
+	}
 }
 
 // SetTitle set the text to display on a menu item
@@ -180,7 +200,7 @@ func systrayMenuItemSelected(id int32) {
 	item := menuItems[id]
 	menuItemsLock.RUnlock()
 	select {
-	case item.ClickedCh <- struct{}{}:
+	case item.ClickedCh <- item.title:
 	// in case no one waiting for the channel
 	default:
 	}

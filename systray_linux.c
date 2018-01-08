@@ -8,8 +8,6 @@
 static AppIndicator *global_app_indicator;
 static GtkWidget *global_tray_menu = NULL;
 static GList *global_menu_items = NULL;
-// Keep track of all generated temp files to remove when app quits
-//static GArray *global_temp_icon_file_names = NULL;
 
 typedef struct {
   GtkWidget *menu_item;
@@ -24,6 +22,13 @@ typedef struct {
   short checked;
 } MenuItemInfo;
 
+typedef struct {
+  int menu_id;
+  int sub_id;
+  char* title;
+  short disabled;
+} SubmenuItemInfo;
+
 int nativeLoop(void) {
   gtk_init(0, NULL);
   global_app_indicator = app_indicator_new("systray", "",
@@ -31,7 +36,6 @@ int nativeLoop(void) {
   app_indicator_set_status(global_app_indicator, APP_INDICATOR_STATUS_ACTIVE);
   global_tray_menu = gtk_menu_new();
   app_indicator_set_menu(global_app_indicator, GTK_MENU(global_tray_menu));
-  //global_temp_icon_file_names = g_array_new(TRUE, FALSE, sizeof(char*));
   systray_ready();
   gtk_main();
   systray_on_exit();
@@ -41,26 +45,8 @@ int nativeLoop(void) {
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
 gboolean do_set_icon(gpointer file_name) {
   char* icon_file_name = (char*)file_name;
-  //GBytes* bytes = (GBytes*)data;
-  //char* temp_file_name = malloc(PATH_MAX);
-  //strcpy(temp_file_name, "/tmp/systray_XXXXXX");
-  //int fd = mkstemp(temp_file_name);
-  //if (fd == -1) {
-  //  printf("failed to create temp icon file %s: %s\n", temp_file_name, strerror(errno));
-  //  return FALSE;
-  //}
-  //g_array_append_val(global_temp_icon_file_names, temp_file_name);
-  //gsize size = 0;
-  //gconstpointer icon_data = g_bytes_get_data(bytes, &size);
-  //ssize_t written = write(fd, icon_data, size);
-  //close(fd);
-  //if(written != size) {
-  //  printf("failed to write temp icon file %s: %s\n", temp_file_name, strerror(errno));
-  //  return FALSE;
-  //}
   app_indicator_set_icon_full(global_app_indicator, icon_file_name, "");
   app_indicator_set_attention_icon_full(global_app_indicator, icon_file_name, "");
-  //g_bytes_unref(bytes);
   return FALSE;
 }
 
@@ -68,21 +54,26 @@ void _systray_menu_item_selected(int *id) {
   systray_menu_item_selected(*id);
 }
 
-// runs in main thread, should always return FALSE to prevent gtk to execute it again
-gboolean do_add_or_update_menu_item(gpointer data) {
-  MenuItemInfo *mii = (MenuItemInfo*)data;
+GtkWidget* _get_menu_item(int menu_id) {
   GList* it;
   for(it = global_menu_items; it != NULL; it = it->next) {
     MenuItemNode* item = (MenuItemNode*)(it->data);
-    if(item->menu_id == mii->menu_id){
-      gtk_menu_item_set_label(GTK_MENU_ITEM(item->menu_item), mii->title);
-      break;
+    if(item->menu_id == menu_id){
+      return item->menu_item;
     }
   }
+  return NULL;
+}
 
-  // menu id doesn't exist, add new item
-  if(it == NULL) {
-    GtkWidget *menu_item = gtk_menu_item_new_with_label(mii->title);
+// runs in main thread, should always return FALSE to prevent gtk to execute it again
+gboolean do_add_or_update_menu_item(gpointer data) {
+  MenuItemInfo *mii = (MenuItemInfo*)data;
+  GtkWidget* menu_item;
+  menu_item = _get_menu_item(mii->menu_id);
+  if(menu_item != NULL) {
+    gtk_menu_item_set_label(GTK_MENU_ITEM(menu_item), mii->title);
+  } else {
+    menu_item = gtk_menu_item_new_with_label(mii->title);
     int *id = malloc(sizeof(int));
     *id = mii->menu_id;
     g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(_systray_menu_item_selected), id);
@@ -98,9 +89,7 @@ gboolean do_add_or_update_menu_item(gpointer data) {
       global_menu_items->prev = new_node;
     }
     global_menu_items = new_node;
-    it = new_node;
   }
-  GtkWidget * menu_item = GTK_WIDGET(((MenuItemNode*)(it->data))->menu_item);
   gtk_widget_set_sensitive(menu_item, mii->disabled == 1 ? FALSE : TRUE);
   gtk_widget_show_all(global_tray_menu);
 
@@ -113,6 +102,63 @@ gboolean do_add_or_update_menu_item(gpointer data) {
 gboolean do_add_separator(gpointer data) {
   GtkWidget *separator = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(global_tray_menu), separator);
+}
+
+void _submenu_item_selected(gpointer data){
+  SubmenuItemInfo *mii = (SubmenuItemInfo*)data;
+  submenu_item_selected(mii->menu_id, mii->sub_id);
+}
+
+// runs in main thread, should always return FALSE to prevent gtk to execute it again
+gboolean do_add_submenu_item(gpointer data) {
+  SubmenuItemInfo *mii = (SubmenuItemInfo*)data;
+  GtkWidget* menu_item = _get_menu_item(mii->menu_id);
+  if(menu_item != NULL) {
+    GtkWidget* submenu = gtk_menu_item_get_submenu(GTK_MENU_ITEM(menu_item));
+    if(submenu == NULL) {
+      submenu = gtk_menu_new();
+      gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item), submenu);
+    }
+    GtkWidget* submenu_item = gtk_menu_item_new_with_label(mii->title);
+    g_signal_connect_swapped(G_OBJECT(submenu_item), "activate", G_CALLBACK(_submenu_item_selected), mii);
+    gtk_menu_shell_append(GTK_MENU_SHELL(submenu), submenu_item);
+    gtk_widget_set_sensitive(menu_item, mii->disabled == 1 ? FALSE : TRUE);
+    gtk_widget_show_all(global_tray_menu);
+    free(mii->title);
+    return FALSE;
+  }
+  free(mii->title);
+  free(mii);
+  return FALSE;
+}
+
+void add_submenu_item(int menuId, int subId, char* title, short disabled) {
+  SubmenuItemInfo *mii = malloc(sizeof(SubmenuItemInfo));
+  mii->menu_id = menuId;
+  mii->sub_id = subId;
+  mii->title = title;
+  mii->disabled = disabled;
+  g_idle_add(do_add_submenu_item, mii);
+}
+
+// runs in main thread, should always return FALSE to prevent gtk to execute it again
+gboolean do_remove_submenu(gpointer data) {
+  SubmenuItemInfo *mii = (SubmenuItemInfo*)data;
+  GtkWidget* menu_item = _get_menu_item(mii->menu_id);
+  if(menu_item != NULL) {
+    GtkWidget* submenu = gtk_menu_item_get_submenu(GTK_MENU_ITEM(menu_item));
+    if(submenu == NULL) {
+      gtk_menu_item_set_submenu(GTK_MENU_ITEM(menu_item), NULL);
+    }
+  }
+  free(mii);
+  return FALSE;
+}
+
+void remove_submenu(int menuId) {
+  SubmenuItemInfo *mii = malloc(sizeof(SubmenuItemInfo));
+  mii->menu_id = menuId;
+  g_idle_add(do_remove_submenu, mii);
 }
 
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
@@ -145,17 +191,6 @@ gboolean do_show_menu_item(gpointer data) {
 
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
 gboolean do_quit(gpointer data) {
-  //int i;
-  //for (i = 0; i < INT_MAX; ++i) {
-    //char * temp_file_name = g_array_index(global_temp_icon_file_names, char*, i);
-    //if (temp_file_name == NULL) {
-      //break;
-    //}
-    //int ret = unlink(temp_file_name);
-    //if (ret == -1) {
-      //printf("failed to remove temp icon file %s: %s\n", temp_file_name, strerror(errno));
-    //}
-  //}
   // app indicator doesn't provide a way to remove it, hide it as a workaround
   app_indicator_set_status(global_app_indicator, APP_INDICATOR_STATUS_PASSIVE);
   gtk_main_quit();
@@ -163,7 +198,6 @@ gboolean do_quit(gpointer data) {
 }
 
 void setIcon(char* icon_file_name) {
-  //GBytes* bytes = g_bytes_new_static(iconBytes, length);
   g_idle_add(do_set_icon, icon_file_name);
 }
 

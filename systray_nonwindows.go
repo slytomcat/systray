@@ -10,7 +10,6 @@ package systray
 #include "systray.h"
 */
 import "C"
-
 //import "unsafe"
 
 func nativeLoop() {
@@ -60,6 +59,29 @@ func addOrUpdateMenuItem(item *MenuItem) {
 func addSeparator(id int32) {
 	C.add_separator(C.int(id))
 }
+
+func addSubmenuItem(menuId int32, subId int32, it *SubmenuItem) {
+	var disabled C.short
+	if it.Disabled {
+		disabled = 1
+	}
+	C.add_submenu_item(
+		C.int(menuId),
+		C.int(subId),
+		C.CString(it.Title),
+		disabled,
+	)
+}
+
+func removeSubmenu(menuId int32){
+	C.remove_submenu(C.int(menuId))
+}
+
+//export submenu_item_selected
+func submenu_item_selected(menuId C.int, subId C.int) {
+	submenuItemSelected(int32(menuId), int32(subId))
+}
+
 
 func hideMenuItem(item *MenuItem) {
 	C.hide_menu_item(
