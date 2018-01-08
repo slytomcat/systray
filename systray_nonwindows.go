@@ -60,16 +60,16 @@ func addSeparator(id int32) {
 	C.add_separator(C.int(id))
 }
 
-func addSubmenuItem(menuId int32, subId int32, it *SubmenuItem) {
-	var disabled C.short
-	if it.Disabled {
-		disabled = 1
+func addSubmenuItem(menuId int32, subId int, title string, disabled bool) {
+	var cDisabled C.short
+	if disabled {
+		cDisabled = 1
 	}
 	C.add_submenu_item(
 		C.int(menuId),
 		C.int(subId),
-		C.CString(it.Title),
-		disabled,
+		C.CString(title),
+		cDisabled,
 	)
 }
 

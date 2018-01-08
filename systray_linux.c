@@ -68,8 +68,7 @@ GtkWidget* _get_menu_item(int menu_id) {
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
 gboolean do_add_or_update_menu_item(gpointer data) {
   MenuItemInfo *mii = (MenuItemInfo*)data;
-  GtkWidget* menu_item;
-  menu_item = _get_menu_item(mii->menu_id);
+  GtkWidget* menu_item = _get_menu_item(mii->menu_id);
   if(menu_item != NULL) {
     gtk_menu_item_set_label(GTK_MENU_ITEM(menu_item), mii->title);
   } else {
@@ -92,7 +91,7 @@ gboolean do_add_or_update_menu_item(gpointer data) {
   }
   gtk_widget_set_sensitive(menu_item, mii->disabled == 1 ? FALSE : TRUE);
   gtk_widget_show_all(global_tray_menu);
-
+  //gtk_widget_show_all(menu_item);
   free(mii->title);
   free(mii->tooltip);
   free(mii);
@@ -102,6 +101,7 @@ gboolean do_add_or_update_menu_item(gpointer data) {
 gboolean do_add_separator(gpointer data) {
   GtkWidget *separator = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(global_tray_menu), separator);
+  //gtk_widget_show(separator);
 }
 
 void _submenu_item_selected(gpointer data){
@@ -122,8 +122,8 @@ gboolean do_add_submenu_item(gpointer data) {
     GtkWidget* submenu_item = gtk_menu_item_new_with_label(mii->title);
     g_signal_connect_swapped(G_OBJECT(submenu_item), "activate", G_CALLBACK(_submenu_item_selected), mii);
     gtk_menu_shell_append(GTK_MENU_SHELL(submenu), submenu_item);
-    gtk_widget_set_sensitive(menu_item, mii->disabled == 1 ? FALSE : TRUE);
-    gtk_widget_show_all(global_tray_menu);
+    gtk_widget_set_sensitive(submenu_item, mii->disabled == 1 ? FALSE : TRUE);
+    gtk_widget_show_all(menu_item);
     free(mii->title);
     return FALSE;
   }

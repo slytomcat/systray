@@ -38,11 +38,6 @@ type MenuItem struct {
 	submenu []string
 }
 
-type SubmenuItem struct {
-	Title string
-	Disabled bool
-}
-
 var (
 	systrayReady  func()
 	systrayExit   func()
@@ -103,17 +98,21 @@ func AddSeparator() {
 	addSeparator(atomic.AddInt32(&currentID, 1))
 }
 
-func (item *MenuItem) AddSubmenu(items []SubmenuItem) {
-	for i, it := range items {
-		addSubmenuItem(item.id, int32(i), &it)
-		item.submenu = append(item.submenu, it.Title)
-	}
+// AddSubenuItem adds submenu item to existin menu item. Submenu item created with
+// designated title and disabled status. The channel of parrent menu item is used to
+// pass the submenu title whenever that submenu item is clicked.
+// Note that channel also returns title of parrent item when it is clicked to open submenu.
+//
+// It can be safely invoked from different goroutines.
+func (item *MenuItem) AddSubmenuItem(title string, disabled bool) {
+	addSubmenuItem(item.id, len(item.submenu), title, disabled)
+	item.submenu = append(item.submenu, title)
 }
 
 func (item *MenuItem) RemoveSubmenu() {
 	removeSubmenu(item.id)
 	item.submenu = []string{}
-	}
+}
 
 func submenuItemSelected(parentId, id int32) {
 	menuItemsLock.RLock()
