@@ -14,13 +14,14 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
 	"github.com/godbus/dbus/v5/prop"
 
-	"fyne.io/systray/internal/generated/menu"
-	"fyne.io/systray/internal/generated/notifier"
+	"github.com/slytomcat/systray/internal/generated/menu"
+	"github.com/slytomcat/systray/internal/generated/notifier"
 )
 
 const (
@@ -295,6 +296,7 @@ type tray struct {
 	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
 	menuVersion      uint32
+	menuNextUpdate   time.Time
 }
 
 func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
@@ -396,8 +398,9 @@ func convertToPixels(data []byte) PX {
 	}
 
 	return PX{
-		img.Bounds().Dx(), img.Bounds().Dy(),
-		argbForImage(img),
+		W:   img.Bounds().Dx(),
+		H:   img.Bounds().Dy(),
+		Pix: argbForImage(img),
 	}
 }
 

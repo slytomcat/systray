@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"fyne.io/systray"
-	"fyne.io/systray/example/icon"
+	"github.com/slytomcat/systray"
+	"github.com/slytomcat/systray/example/icon"
 )
 
 func main() {
@@ -76,6 +76,7 @@ func onReady() {
 			select {
 			case <-mChange.ClickedCh:
 				mChange.SetTitle("I've Changed")
+				systray.SetTemplateIcon(icon.Data1, icon.Data1)
 			case <-mChecked.ClickedCh:
 				if mChecked.Checked() {
 					mChecked.Uncheck()

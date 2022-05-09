@@ -15,8 +15,7 @@ removing the GTK dependency and support for legacy linux system tray.
 ```go
 package main
 
-import "fyne.io/systray"
-import "fyne.io/systray/example/icon"
+import "github.com/slytomcat/systray"
 
 func main() {
 	systray.Run(onReady, onExit)
@@ -65,16 +64,16 @@ For this reason there is another entry point `RunWithExternalLoop`.
 This function of the library returns a start and end function that should be called
 when the application has started and will end, to loop in appropriate features.
 
-See [full API](https://pkg.go.dev/fyne.io/systray?tab=doc) as well as [CHANGELOG](https://github.com/fyne-io/systray/tree/master/CHANGELOG.md).
+See [full API](https://pkg.go.dev/github.com/slytomcat/systray?tab=doc).
 
 Note: this package requires cgo, so make sure you set `CGO_ENABLED=1` before building.
 
 ## Try the example app!
 
-Have go v1.12+ or higher installed? Here's an example to get started on macOS or Linux:
+Have go v1.16+ or higher installed? Here's an example to get started on macOS:
 
 ```sh
-git clone https://github.com/fyne-io/systray
+git clone https://github.com/slytomcat/systray
 cd systray/example
 go run .
 ```
