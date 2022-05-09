@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/skycoin/systray"
-	"github.com/skycoin/systray/example/icon"
+	"github.com/slytomcat/systray"
+	"github.com/slytomcat/systray/example/icon"
 )
 
 func main() {
@@ -22,6 +22,7 @@ func onReady() {
 	systray.SetTitle("Awesome App")
 	systray.SetTooltip("Lantern")
 	mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
+	mQuit.Enable()
 	go func() {
 		<-mQuit.ClickedCh
 		fmt.Println("Requesting quit")
