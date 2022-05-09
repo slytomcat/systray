@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -248,6 +249,7 @@ type tray struct {
 	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
 	menuVersion      uint32
+	menuNextUpdate   time.Time
 }
 
 func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {

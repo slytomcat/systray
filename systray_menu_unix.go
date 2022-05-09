@@ -5,6 +5,7 @@ package systray
 
 import (
 	"log"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
@@ -192,9 +193,7 @@ func addOrUpdateMenuItem(item *MenuItem) {
 	}
 
 	applyItemToLayout(item, layout)
-	if exists {
-		refresh()
-	}
+	refresh()
 }
 
 func addSeparator(id uint32) {
@@ -273,8 +272,25 @@ func showMenuItem(item *MenuItem) {
 	}
 }
 
+var refreshTimer *time.Timer
+
+const refreshDelay = 100 * time.Millisecond // refresh not often than 10 times per second
+
 func refresh() {
-	if instance.conn != nil && instance.menuProps != nil {
+	if instance.conn == nil || instance.menuProps == nil {
+		return
+	}
+	if refreshTimer != nil {
+		if instance.menuNextUpdate.Before(time.Now()) {
+			refreshTimer.Reset(refreshDelay) // reset will schedule new run
+			instance.menuNextUpdate = time.Now().Add(refreshDelay)
+		}
+		return // do nothing when refresh is already scheduled
+	}
+	instance.menuNextUpdate = time.Now().Add(refreshDelay)
+	refreshTimer = time.AfterFunc(refreshDelay, func() {
+		instance.menuLock.Lock()
+		defer instance.menuLock.Unlock()
 		instance.menuVersion++
 		dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
 			dbus.MakeVariant(instance.menuVersion))
@@ -292,5 +308,5 @@ func refresh() {
 		if err != nil {
 			log.Printf("systray error: failed to emit layout updated signal: %s\n", err)
 		}
-	}
+	})
 }
