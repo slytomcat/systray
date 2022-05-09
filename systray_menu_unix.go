@@ -212,6 +212,8 @@ func addSeparator(id uint32) {
 }
 
 func applyItemToLayout(in *MenuItem, out *menuLayout) {
+	instance.menuLock.Lock()
+	defer instance.menuLock.Unlock()
 	out.V1["enabled"] = dbus.MakeVariant(!in.disabled)
 	out.V1["label"] = dbus.MakeVariant(in.title)
 
