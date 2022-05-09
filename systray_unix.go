@@ -11,9 +11,10 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	_ "image/png"
+	_ "image/png" // used only here
 	"log"
 	"os"
+	"sync"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -56,7 +57,7 @@ func SetIcon(iconBytes []byte) {
 	}
 
 	dbusErr := instance.props.Set("org.kde.StatusNotifierItem", "IconPixmap",
-		dbus.MakeVariant([]PX{convertToPixels(iconBytes)}))
+		dbus.MakeVariant([]px{convertToPixels(iconBytes)}))
 	if dbusErr != nil {
 		log.Printf("systray error: failed to set IconPixmap prop: %s\n", dbusErr)
 		return
@@ -229,6 +230,7 @@ type tray struct {
 	title, tooltipTitle string
 
 	menu             *menuLayout
+	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
 	menuVersion      uint32
 }
@@ -267,7 +269,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"IconPixmap": {
-				Value:    []PX{convertToPixels(t.iconData)},
+				Value:    []px{convertToPixels(t.iconData)},
 				Writable: true,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
@@ -299,7 +301,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 		}}
 }
 
-type PX struct {
+type px struct {
 	W, H int
 	Pix  []byte
 }
@@ -308,23 +310,23 @@ type PX struct {
 // Param names need to match the generated code...
 type tooltip = struct {
 	V0 string // name
-	V1 []PX   // icons
+	V1 []px   // icons
 	V2 string // title
 	V3 string // description
 }
 
-func convertToPixels(data []byte) PX {
+func convertToPixels(data []byte) px {
 	if len(data) == 0 {
-		return PX{}
+		return px{}
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		log.Printf("Failed to read icon format %v", err)
-		return PX{}
+		return px{}
 	}
 
-	return PX{
+	return px{
 		img.Bounds().Dx(), img.Bounds().Dy(),
 		argbForImage(img),
 	}
