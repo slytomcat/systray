@@ -80,6 +80,35 @@ func SetIcon(iconBytes []byte) {
 	}
 }
 
+// SetIconByName sets the systray icon form standard icons by it's name.
+// It availabe only on Linux platforms.
+// The standard icons names can be found at https://specifications.freedesktop.org/icon-naming-spec/latest/ar01s04.html .
+func SetIconByName(iconName string) {
+	instance.iconName = iconName
+	if instance.props == nil {
+		return
+	}
+
+	dbusErr := instance.props.Set("org.kde.StatusNotifierItem", "IconName",
+		dbus.MakeVariant(iconName))
+	if dbusErr != nil {
+		log.Printf("systray error: failed to set IconName prop: %s\n", dbusErr)
+		return
+	}
+	if instance.conn == nil {
+		return
+	}
+
+	err := notifier.Emit(instance.conn, &notifier.StatusNotifierItem_NewIconSignal{
+		Path: path,
+		Body: &notifier.StatusNotifierItem_NewIconSignalBody{},
+	})
+	if err != nil {
+		log.Printf("systray error: failed to emit new icon signal: %s\n", err)
+		return
+	}
+}
+
 // SetTitle sets the systray title, only available on Mac and Linux.
 func SetTitle(t string) {
 	instance.lock.Lock()
@@ -248,6 +277,8 @@ type tray struct {
 	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
 	menuVersion      uint32
+
+	iconName string // IconName
 }
 
 func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
@@ -280,8 +311,8 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"IconName": {
-				Value:    "",
-				Writable: false,
+				Value:    t.iconName,
+				Writable: true,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
 			},
