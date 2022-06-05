@@ -27,7 +27,7 @@ func onReady() {
 	systray.SetTooltip("Pretty awesome超级棒")
 	mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
 
-	// Sets the icon of a menu item. Only available on Mac and Windows.
+	// Sets the icon of a menu item.
 	mQuit.SetIcon(icon.Data)
 }
 

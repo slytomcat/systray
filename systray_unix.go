@@ -131,11 +131,12 @@ func SetTooltip(tooltipTitle string) {
 	}
 }
 
-// SetTemplateIcon sets the icon of a menu item as a template icon (on macOS). On Windows, it
-// falls back to the regular icon bytes and on Linux it does nothing.
+// SetTemplateIcon sets the icon of a menu item as a template icon (on macOS). On Windows and
+// Linux, it falls back to the regular icon bytes.
 // templateIconBytes and regularIconBytes should be the content of .ico for windows and
 // .ico/.jpg/.png for other platforms.
 func (item *MenuItem) SetTemplateIcon(templateIconBytes []byte, regularIconBytes []byte) {
+	item.SetIcon(regularIconBytes)
 }
 
 func setInternalLoop(_ bool) {

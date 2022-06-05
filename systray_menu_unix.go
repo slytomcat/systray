@@ -12,9 +12,16 @@ import (
 	"github.com/slytomcat/systray/internal/generated/menu"
 )
 
-// SetIcon sets the icon of a menu item. Only works on macOS and Windows.
+// SetIcon sets the icon of a menu item.
 // iconBytes should be the content of .ico/.jpg/.png
 func (item *MenuItem) SetIcon(iconBytes []byte) {
+	instance.menuLock.Lock()
+	defer instance.menuLock.Unlock()
+	m, exists := findLayout(int32(item.id))
+	if exists {
+		m.V1["icon-data"] = dbus.MakeVariant(iconBytes)
+		refresh()
+	}
 }
 
 // copyLayout makes full copy of layout
