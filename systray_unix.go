@@ -242,7 +242,7 @@ type tray struct {
 	// title and tooltip state
 	title, tooltipTitle string
 
-	lock             sync.RWMutex
+	lock             sync.Mutex
 	menu             *menuLayout
 	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
@@ -250,11 +250,8 @@ type tray struct {
 }
 
 func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
-	t.lock.RLock()
-	title := t.title
-	tooltipTitle := t.tooltipTitle
-	iconData := t.iconData
-	t.lock.RUnlock()
+	t.lock.Lock()
+	t.lock.Unlock()
 	return map[string]map[string]*prop.Prop{
 		"org.kde.StatusNotifierItem": {
 			"Status": {
@@ -264,7 +261,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"Title": {
-				Value:    title,
+				Value:    t.title,
 				Writable: true,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
@@ -288,7 +285,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"IconPixmap": {
-				Value:    []PX{convertToPixels(iconData)},
+				Value:    []PX{convertToPixels(t.iconData)},
 				Writable: true,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
@@ -312,7 +309,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"ToolTip": {
-				Value:    tooltip{V2: tooltipTitle},
+				Value:    tooltip{V2: t.tooltipTitle},
 				Writable: true,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
