@@ -89,7 +89,7 @@ func (t *tray) GetProperty(id int32, name string) (value dbus.Variant, err *dbus
 // Event is com.canonical.dbusmenu.Event method.
 func (t *tray) Event(id int32, eventID string, data dbus.Variant, timestamp uint32) (err *dbus.Error) {
 	if eventID == "clicked" {
-		menuItemClicked(uint32(id))
+		systrayMenuItemSelected(uint32(id))
 	}
 	return
 }
@@ -103,7 +103,7 @@ func (t *tray) EventGroup(events []struct {
 }) (idErrors []int32, err *dbus.Error) {
 	for _, event := range events {
 		if event.V1 == "clicked" {
-			menuItemClicked(uint32(event.V0))
+			systrayMenuItemSelected(uint32(event.V0))
 		}
 	}
 	return
@@ -117,17 +117,6 @@ func (t *tray) AboutToShow(id int32) (needUpdate bool, err *dbus.Error) {
 // AboutToShowGroup is com.canonical.dbusmenu.AboutToShowGroup method.
 func (t *tray) AboutToShowGroup(ids []int32) (updatesNeeded []int32, idErrors []int32, err *dbus.Error) {
 	return
-}
-
-func menuItemClicked(id uint32) {
-	menuItemsLock.RLock()
-	item, ok := menuItems[id]
-	menuItemsLock.RUnlock()
-	if !ok {
-		log.Printf("systray error: failed to look up clicked menu item with ID %d\n", id)
-		return
-	}
-	item.ClickedCh <- struct{}{}
 }
 
 func createMenuPropSpec() map[string]map[string]*prop.Prop {
