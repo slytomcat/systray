@@ -267,8 +267,6 @@ func showMenuItem(item *MenuItem) {
 }
 
 func refresh() {
-	instance.lock.Lock()
-	defer instance.lock.Unlock()
 	if instance.conn != nil && instance.menuProps != nil {
 		instance.menuVersion++
 		dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
