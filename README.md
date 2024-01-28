@@ -35,28 +35,6 @@ func onExit() {
 	// clean up here
 }
 ```
-
-### Running in a Fyne app
-
-This repository is designed to allow any toolkit to integrate system tray without any additional dependencies.
-It is maintained by the Fyne team, but if you are using Fyne there is an even easier to use API in the main repository that wraps this project.
-
-In your app you can use a standard `fyne.Menu` structure and pass it to `SetSystemTrayMenu` when your app is a desktop app, as follows:
-
-```go
-	menu := fyne.NewMenu("MyApp",
-		fyne.NewMenuItem("Show", func() {
-			log.Println("Tapped show")
-		}))
-
-	if desk, ok := myApp.(desktop.App); ok {
-		desk.SetSystemTrayMenu(menu)
-	}
-```
-
-You can find out more in the toolkit documentation:
-[System Tray Menu](https://developer.fyne.io/explore/systray).
-
 ### Run in another toolkit
 
 Most graphical toolkits will grab the main loop so the `Run` code above is not possible.
@@ -100,7 +78,7 @@ Search for "StatusNotifierItems XEmbedded" in your package manager.
 
 ### Windows
 
-* To avoid opening a console at application startup, use "fyne package" for your app or manually use these compile flags:
+* To avoid opening a console at application startup use these compile flags:
 
 ```sh
 go build -ldflags -H=windowsgui
@@ -108,7 +86,7 @@ go build -ldflags -H=windowsgui
 
 ### macOS
 
-On macOS, you will need to create an application bundle to wrap the binary; simply use "fyne package" or add folders with the following minimal structure and assets:
+On macOS, you will need to create an application bundle to wrap the binary add folders with the following minimal structure and assets:
 
 ```
 SystrayApp.app/
