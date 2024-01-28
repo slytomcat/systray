@@ -1,5 +1,4 @@
-//go:build linux || freebsd || openbsd || netbsd
-// +build linux freebsd openbsd netbsd
+//go:build (linux || freebsd || openbsd || netbsd) && !android
 
 package systray
 
@@ -252,6 +251,42 @@ func findSubLayout(id int32, vals []dbus.Variant) (*menuLayout, bool) {
 	return nil, false
 }
 
+func removeSubLayout(id int32, vals []dbus.Variant) ([]dbus.Variant, bool) {
+	for idx, i := range vals {
+		item := i.Value().(*menuLayout)
+		if item.V0 == id {
+			return append(vals[:idx], vals[idx+1:]...), true
+		}
+
+		if len(item.V2) > 0 {
+			if child, removed := removeSubLayout(id, item.V2); removed {
+				return child, true
+			}
+		}
+	}
+
+	return vals, false
+}
+
+func removeMenuItem(item *MenuItem) {
+	instance.menuLock.Lock()
+	defer instance.menuLock.Unlock()
+
+	parent := instance.menu
+	if item.parent != nil {
+		m, ok := findLayout(int32(item.parent.id))
+		if !ok {
+			return
+		}
+		parent = m
+	}
+
+	if items, removed := removeSubLayout(int32(item.id), parent.V2); removed {
+		parent.V2 = items
+		refresh()
+	}
+}
+
 func hideMenuItem(item *MenuItem) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
@@ -309,4 +344,12 @@ func refresh() {
 			log.Printf("systray error: failed to emit layout updated signal: %s\n", err)
 		}
 	})
+}
+
+func resetMenu() {
+	instance.menuLock.Lock()
+	defer instance.menuLock.Unlock()
+	instance.menu = &menuLayout{}
+	instance.menuVersion++
+	refresh()
 }

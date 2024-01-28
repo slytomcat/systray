@@ -10,14 +10,24 @@ import (
 )
 
 var (
-	systrayReady  func()
-	systrayExit   func()
-	menuItems     = make(map[uint32]*MenuItem)
-	menuItemsLock sync.RWMutex
+	systrayReady      func()
+	systrayExit       func()
+	systrayExitCalled bool
+	menuItems         = make(map[uint32]*MenuItem)
+	menuItemsLock     sync.RWMutex
 
-	currentID = uint32(0)
+	currentID atomic.Uint32
 	quitOnce  sync.Once
 )
+
+// This helper function allows us to call systrayExit only once,
+// without accidentally calling it twice in the same lifetime.
+func runSystrayExit() {
+	if !systrayExitCalled {
+		systrayExitCalled = true
+		systrayExit()
+	}
+}
 
 func init() {
 	runtime.LockOSThread()
@@ -56,7 +66,7 @@ func (item *MenuItem) String() string {
 func newMenuItem(title string, tooltip string, parent *MenuItem) *MenuItem {
 	return &MenuItem{
 		ClickedCh:   make(chan struct{}),
-		id:          atomic.AddUint32(&currentID, 1),
+		id:          currentID.Add(1),
 		title:       title,
 		tooltip:     tooltip,
 		disabled:    false,
@@ -80,7 +90,10 @@ func Run(onReady, onExit func()) {
 func RunWithExternalLoop(onReady, onExit func()) (start, end func()) {
 	Register(onReady, onExit)
 
-	return nativeStart, nativeEnd
+	return nativeStart, func() {
+		nativeEnd()
+		Quit()
+	}
 }
 
 // Register initializes GUI and registers the callbacks but relies on the
@@ -108,7 +121,13 @@ func Register(onReady func(), onExit func()) {
 		onExit = func() {}
 	}
 	systrayExit = onExit
+	systrayExitCalled = false
 	registerSystray()
+}
+
+// ResetMenu will remove all menu items
+func ResetMenu() {
+	resetMenu()
 }
 
 // Quit the systray
@@ -126,8 +145,8 @@ func AddMenuItem(title string, tooltip string) *MenuItem {
 }
 
 // AddMenuItemCheckbox adds a menu item with the designated title and tooltip and a checkbox for Linux.
+// On other platforms there will be a check indicated next to the item if `checked` is true.
 // It can be safely invoked from different goroutines.
-// On Windows and OSX this is the same as calling AddMenuItem
 func AddMenuItemCheckbox(title string, tooltip string, checked bool) *MenuItem {
 	item := newMenuItem(title, tooltip, nil)
 	item.isCheckable = true
@@ -138,7 +157,12 @@ func AddMenuItemCheckbox(title string, tooltip string, checked bool) *MenuItem {
 
 // AddSeparator adds a separator bar to the menu
 func AddSeparator() {
-	addSeparator(atomic.AddUint32(&currentID, 1))
+	addSeparator(0)
+}
+
+// AddSeparator adds a separator bar to the submenu
+func (item *MenuItem) AddSeparator() {
+	addSeparator(item.id)
 }
 
 // AddSubMenuItem adds a nested sub-menu item with the designated title and tooltip.
@@ -193,6 +217,14 @@ func (item *MenuItem) Disable() {
 // Hide hides a menu item
 func (item *MenuItem) Hide() {
 	hideMenuItem(item)
+}
+
+// Remove removes a menu item
+func (item *MenuItem) Remove() {
+	removeMenuItem(item)
+	menuItemsLock.Lock()
+	delete(menuItems, item.id)
+	menuItemsLock.Unlock()
 }
 
 // Show shows a previously hidden menu item
