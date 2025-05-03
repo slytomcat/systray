@@ -12,7 +12,7 @@ import (
 var (
 	systrayReady      func()
 	systrayExit       func()
-	systrayExitCalled bool
+	systrayExitCalled atomic.Bool
 	menuItems         = make(map[uint32]*MenuItem)
 	menuItemsLock     sync.RWMutex
 
@@ -23,8 +23,7 @@ var (
 // This helper function allows us to call systrayExit only once,
 // without accidentally calling it twice in the same lifetime.
 func runSystrayExit() {
-	if !systrayExitCalled {
-		systrayExitCalled = true
+	if systrayExitCalled.CompareAndSwap(false, true) {
 		systrayExit()
 	}
 }
@@ -121,7 +120,6 @@ func Register(onReady func(), onExit func()) {
 		onExit = func() {}
 	}
 	systrayExit = onExit
-	systrayExitCalled = false
 	registerSystray()
 }
 

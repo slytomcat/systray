@@ -76,6 +76,14 @@ func SetIcon(iconBytes []byte) {
 	}
 }
 
+// SetID sets the technical ID of systray item, only available on Mac and Linux.
+// it must be called before Run otherwise ID will be "systray_<PID>"
+func SetID(id string) {
+	instance.lock.Lock()
+	defer instance.lock.Unlock()
+	instance.id = id
+}
+
 // SetTitle sets the systray title, only available on Mac and Linux.
 func SetTitle(t string) {
 	instance.lock.Lock()
@@ -109,7 +117,7 @@ func SetTitle(t string) {
 }
 
 // SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
-// only available on Mac and Windows.
+// only available on Mac, Windows and Linux.
 func SetTooltip(tooltipTitle string) {
 	instance.lock.Lock()
 	instance.tooltipTitle = tooltipTitle
@@ -289,7 +297,7 @@ type tray struct {
 	// icon data for the main systray icon
 	iconData []byte
 	// title and tooltip state
-	title, tooltipTitle string
+	title, tooltipTitle, id string
 
 	lock             sync.Mutex
 	menu             *menuLayout
@@ -302,9 +310,8 @@ type tray struct {
 func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	id := t.title
-	if id == "" {
-		id = fmt.Sprintf("systray_%d", os.Getpid())
+	if t.id == "" {
+		t.id = fmt.Sprintf("systray_%d", os.Getpid())
 	}
 	return map[string]map[string]*prop.Prop{
 		"org.kde.StatusNotifierItem": {
@@ -321,7 +328,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"Id": {
-				Value:    id,
+				Value:    t.id,
 				Writable: false,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
