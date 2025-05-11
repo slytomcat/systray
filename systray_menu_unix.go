@@ -25,19 +25,21 @@ func (item *MenuItem) SetIcon(iconBytes []byte) {
 }
 
 // copyLayout makes full copy of layout
-func copyLayout(in *menuLayout, depth int32) *menuLayout {
+func copyLayout(in *menuLayout, depth int32, pf func(string) bool) *menuLayout {
 	out := menuLayout{
 		V0: in.V0,
 		V1: make(map[string]dbus.Variant, len(in.V1)),
 	}
 	for k, v := range in.V1 {
-		out.V1[k] = v
+		if pf(k) {
+			out.V1[k] = v
+		}
 	}
 	if depth != 0 {
 		depth--
 		out.V2 = make([]dbus.Variant, len(in.V2))
 		for i, v := range in.V2 {
-			out.V2[i] = dbus.MakeVariant(copyLayout(v.Value().(*menuLayout), depth))
+			out.V2[i] = dbus.MakeVariant(copyLayout(v.Value().(*menuLayout), depth, pf))
 		}
 	} else {
 		out.V2 = []dbus.Variant{}
@@ -45,13 +47,24 @@ func copyLayout(in *menuLayout, depth int32) *menuLayout {
 	return &out
 }
 
+func propFilter(propertyNames []string) func(string) bool {
+	if len(propertyNames) == 0 {
+		return func(_ string) bool { return true }
+	}
+	props := make(map[string]bool, len(propertyNames))
+	for _, name := range propertyNames {
+		props[name] = true
+	}
+	return func(name string) bool { return props[name] }
+}
+
 // GetLayout is com.canonical.dbusmenu.GetLayout method.
 func (t *tray) GetLayout(parentID int32, recursionDepth int32, propertyNames []string) (revision uint32, layout menuLayout, err *dbus.Error) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
 	if m, ok := findLayout(parentID); ok {
-		// return copy of menu layout to prevent panic from cuncurrent access to layout
-		return instance.menuVersion, *copyLayout(m, recursionDepth), nil
+		// return copy of menu layout to prevent panic from concurrent access to layout
+		return instance.menuVersion, *copyLayout(m, recursionDepth, propFilter(propertyNames)), nil
 	}
 	return
 }
@@ -63,6 +76,7 @@ func (t *tray) GetGroupProperties(ids []int32, propertyNames []string) (properti
 }, err *dbus.Error) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
+	pf := propFilter(propertyNames)
 	for _, id := range ids {
 		if m, ok := findLayout(id); ok {
 			p := struct {
@@ -73,7 +87,9 @@ func (t *tray) GetGroupProperties(ids []int32, propertyNames []string) (properti
 				V1: make(map[string]dbus.Variant, len(m.V1)),
 			}
 			for k, v := range m.V1 {
-				p.V1[k] = v
+				if pf(k) {
+					p.V1[k] = v
+				}
 			}
 			properties = append(properties, p)
 		}
@@ -311,22 +327,25 @@ var refreshTimer *time.Timer
 
 const refreshDelay = 100 * time.Millisecond // refresh not often than 10 times per second
 
+// refresh is always called after instance.menuLock.Lock().
+// It collect series of menu updates and make the real refresh not often than 10 times per second.
+// The single update of menu will be refreshed in 0.1 seconds.
 func refresh() {
 	if instance.conn == nil || instance.menuProps == nil {
 		return
 	}
 	if refreshTimer != nil {
-		if instance.menuNextUpdate.Before(time.Now()) {
+		if instance.updatesSent {
 			refreshTimer.Reset(refreshDelay) // reset will schedule new run
-			instance.menuNextUpdate = time.Now().Add(refreshDelay)
+			instance.updatesSent = false
 		}
 		return // do nothing when refresh is already scheduled
 	}
-	instance.menuNextUpdate = time.Now().Add(refreshDelay)
 	refreshTimer = time.AfterFunc(refreshDelay, func() {
-		instance.menuLock.Lock()
+		instance.menuLock.Lock() // lock is required as it called from separate goroutine
 		defer instance.menuLock.Unlock()
-		instance.menuVersion++
+		instance.updatesSent = true
+		instance.menuVersion++ // menu version is updated only on sending signal
 		dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
 			dbus.MakeVariant(instance.menuVersion))
 		if dbusErr != nil {
@@ -350,6 +369,5 @@ func resetMenu() {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
 	instance.menu = &menuLayout{}
-	instance.menuVersion++
 	refresh()
 }

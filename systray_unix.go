@@ -14,7 +14,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -51,7 +50,7 @@ func SetTemplateIcon(templateIconBytes []byte, regularIconBytes []byte) {
 // for other platforms.
 func SetIcon(iconBytes []byte) {
 	instance.lock.Lock()
-	instance.iconData = iconBytes
+	instance.iconData = convertToPixels(iconBytes)
 	props := instance.props
 	conn := instance.conn
 	defer instance.lock.Unlock()
@@ -61,7 +60,7 @@ func SetIcon(iconBytes []byte) {
 	}
 
 	props.SetMust("org.kde.StatusNotifierItem", "IconPixmap",
-		[]PX{convertToPixels(iconBytes)})
+		[]PX{instance.iconData})
 	if conn == nil {
 		return
 	}
@@ -294,8 +293,8 @@ type tray struct {
 	// the DBus connection that we will use
 	conn *dbus.Conn
 
-	// icon data for the main systray icon
-	iconData []byte
+	// icon PixMap for the main systray icon
+	iconData PX
 	// title and tooltip state
 	title, tooltipTitle, id string
 
@@ -303,8 +302,8 @@ type tray struct {
 	menu             *menuLayout
 	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
+	updatesSent      bool
 	menuVersion      uint32
-	menuNextUpdate   time.Time
 }
 
 func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
@@ -346,7 +345,7 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 				Callback: nil,
 			},
 			"IconPixmap": {
-				Value:    []PX{convertToPixels(t.iconData)},
+				Value:    []PX{t.iconData},
 				Writable: true,
 				Emit:     prop.EmitTrue,
 				Callback: nil,
