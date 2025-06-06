@@ -4,7 +4,6 @@ package systray
 
 import (
 	"log"
-	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
@@ -211,9 +210,10 @@ func addOrUpdateMenuItem(item *MenuItem) {
 	refresh()
 }
 
-func addSeparator(id uint32) {
+func addSeparator(id uint32, parent uint32) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
+	menu, _ := findLayout(int32(parent))
 	layout := &menuLayout{
 		V0: int32(id),
 		V1: map[string]dbus.Variant{
@@ -221,7 +221,7 @@ func addSeparator(id uint32) {
 		},
 		V2: []dbus.Variant{},
 	}
-	instance.menu.V2 = append(instance.menu.V2, dbus.MakeVariant(layout))
+	menu.V2 = append(menu.V2, dbus.MakeVariant(layout))
 	refresh()
 }
 
@@ -323,46 +323,27 @@ func showMenuItem(item *MenuItem) {
 	}
 }
 
-var refreshTimer *time.Timer
-
-const refreshDelay = 100 * time.Millisecond // refresh not often than 10 times per second
-
 // refresh is always called after instance.menuLock.Lock().
-// It collect series of menu updates and make the real refresh not often than 10 times per second.
-// The single update of menu will be refreshed in 0.1 seconds.
 func refresh() {
 	if instance.conn == nil || instance.menuProps == nil {
 		return
 	}
-	if refreshTimer != nil {
-		if instance.updatesSent {
-			refreshTimer.Reset(refreshDelay) // reset will schedule new run
-			instance.updatesSent = false
-		}
-		return // do nothing when refresh is already scheduled
+	instance.menuVersion++
+	dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
+		dbus.MakeVariant(instance.menuVersion))
+	if dbusErr != nil {
+		log.Printf("systray error: failed to update menu version: %s\n", dbusErr)
+		return
 	}
-	refreshTimer = time.AfterFunc(refreshDelay, func() {
-		instance.menuLock.Lock() // lock is required as it called from separate goroutine
-		defer instance.menuLock.Unlock()
-		instance.updatesSent = true
-		instance.menuVersion++ // menu version is updated only on sending signal
-		dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
-			dbus.MakeVariant(instance.menuVersion))
-		if dbusErr != nil {
-			log.Printf("systray error: failed to update menu version: %s\n", dbusErr)
-			return
-		}
-
-		err := menu.Emit(instance.conn, &menu.Dbusmenu_LayoutUpdatedSignal{
-			Path: menuPath,
-			Body: &menu.Dbusmenu_LayoutUpdatedSignalBody{
-				Revision: instance.menuVersion,
-			},
-		})
-		if err != nil {
-			log.Printf("systray error: failed to emit layout updated signal: %s\n", err)
-		}
+	err := menu.Emit(instance.conn, &menu.Dbusmenu_LayoutUpdatedSignal{
+		Path: menuPath,
+		Body: &menu.Dbusmenu_LayoutUpdatedSignalBody{
+			Revision: instance.menuVersion,
+		},
 	})
+	if err != nil {
+		log.Printf("systray error: failed to emit layout updated signal: %s\n", err)
+	}
 }
 
 func resetMenu() {

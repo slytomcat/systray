@@ -302,7 +302,6 @@ type tray struct {
 	menu             *menuLayout
 	menuLock         sync.RWMutex
 	props, menuProps *prop.Properties
-	updatesSent      bool
 	menuVersion      uint32
 }
 

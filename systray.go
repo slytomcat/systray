@@ -155,12 +155,12 @@ func AddMenuItemCheckbox(title string, tooltip string, checked bool) *MenuItem {
 
 // AddSeparator adds a separator bar to the menu
 func AddSeparator() {
-	addSeparator(0)
+	addSeparator(currentID.Add(1), 0)
 }
 
 // AddSeparator adds a separator bar to the submenu
 func (item *MenuItem) AddSeparator() {
-	addSeparator(item.id)
+	addSeparator(currentID.Add(1), item.id)
 }
 
 // AddSubMenuItem adds a nested sub-menu item with the designated title and tooltip.
