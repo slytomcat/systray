@@ -1,0 +1,42 @@
+name: Go
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: './go.mod'
+      - name: Build amd64
+        run: |
+          cd example
+          GOOS=linux GOARCH=amd64 go build .
+      - name: Upload a Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build_artifacts
+          path: |
+            example/example
+  push:
+    needs: [build]
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4.1.7
+        with:
+          name: build_artifacts
+      - name: draft new release and upload assets
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN }}
+        run: |
+          gh release create "$(git branch --show-current)-$(git rev-parse --short HEAD)" example/example
