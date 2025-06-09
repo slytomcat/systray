@@ -4,6 +4,8 @@ package systray
 
 import (
 	"log"
+	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
@@ -323,11 +325,39 @@ func showMenuItem(item *MenuItem) {
 	}
 }
 
+var delay = 5 * time.Millisecond // delay before real refresh
+var change = make(chan struct{}, 100)
+var initialize sync.Once
+
 // refresh is always called after instance.menuLock.Lock().
 func refresh() {
 	if instance.conn == nil || instance.menuProps == nil {
 		return
 	}
+	initialize.Do(func() {
+		go func() {
+			timer := time.NewTimer(time.Hour)
+			timer.Stop()
+			for {
+				select {
+				case <-change:
+					timer.Reset(delay)
+				case <-timer.C:
+					timer.Stop()
+					doRefresh()
+				case <-quitChan:
+					return
+				}
+			}
+		}()
+	})
+	change <- struct{}{}
+}
+
+func doRefresh() {
+	// as doRefresh is executed in separate goroutine it have to lock instance.menuLock
+	instance.menuLock.Lock()
+	defer instance.menuLock.Unlock()
 	instance.menuVersion++
 	dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
 		dbus.MakeVariant(instance.menuVersion))
