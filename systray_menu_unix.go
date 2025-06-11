@@ -26,21 +26,19 @@ func (item *MenuItem) SetIcon(iconBytes []byte) {
 }
 
 // copyLayout makes full copy of layout
-func copyLayout(in *menuLayout, depth int32, pf func(string) bool) *menuLayout {
+func copyLayout(in *menuLayout, depth int32) *menuLayout {
 	out := menuLayout{
 		V0: in.V0,
 		V1: make(map[string]dbus.Variant, len(in.V1)),
 	}
 	for k, v := range in.V1 {
-		if pf(k) {
-			out.V1[k] = v
-		}
+		out.V1[k] = v
 	}
 	if depth != 0 {
 		depth--
 		out.V2 = make([]dbus.Variant, len(in.V2))
 		for i, v := range in.V2 {
-			out.V2[i] = dbus.MakeVariant(copyLayout(v.Value().(*menuLayout), depth, pf))
+			out.V2[i] = dbus.MakeVariant(copyLayout(v.Value().(*menuLayout), depth))
 		}
 	} else {
 		out.V2 = []dbus.Variant{}
@@ -48,36 +46,24 @@ func copyLayout(in *menuLayout, depth int32, pf func(string) bool) *menuLayout {
 	return &out
 }
 
-func propFilter(propertyNames []string) func(string) bool {
-	if len(propertyNames) == 0 {
-		return func(_ string) bool { return true }
-	}
-	props := make(map[string]bool, len(propertyNames))
-	for _, name := range propertyNames {
-		props[name] = true
-	}
-	return func(name string) bool { return props[name] }
-}
-
 // GetLayout is com.canonical.dbusmenu.GetLayout method.
-func (t *tray) GetLayout(parentID int32, recursionDepth int32, propertyNames []string) (revision uint32, layout menuLayout, err *dbus.Error) {
+func (t *tray) GetLayout(parentID int32, recursionDepth int32, _ []string) (revision uint32, layout menuLayout, err *dbus.Error) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
 	if m, ok := findLayout(parentID); ok {
 		// return copy of menu layout to prevent panic from concurrent access to layout
-		return instance.menuVersion, *copyLayout(m, recursionDepth, propFilter(propertyNames)), nil
+		return instance.menuVersion, *copyLayout(m, recursionDepth), nil
 	}
 	return
 }
 
 // GetGroupProperties is com.canonical.dbusmenu.GetGroupProperties method.
-func (t *tray) GetGroupProperties(ids []int32, propertyNames []string) (properties []struct {
+func (t *tray) GetGroupProperties(ids []int32, _ []string) (properties []struct {
 	V0 int32
 	V1 map[string]dbus.Variant
 }, err *dbus.Error) {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
-	pf := propFilter(propertyNames)
 	for _, id := range ids {
 		if m, ok := findLayout(id); ok {
 			p := struct {
@@ -88,9 +74,7 @@ func (t *tray) GetGroupProperties(ids []int32, propertyNames []string) (properti
 				V1: make(map[string]dbus.Variant, len(m.V1)),
 			}
 			for k, v := range m.V1 {
-				if pf(k) {
-					p.V1[k] = v
-				}
+				p.V1[k] = v
 			}
 			properties = append(properties, p)
 		}
