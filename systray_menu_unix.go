@@ -4,11 +4,13 @@ package systray
 
 import (
 	"log"
-	"sync"
+	"maps"
 	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
+
+	"slices"
 
 	"github.com/slytomcat/systray/internal/generated/menu"
 )
@@ -31,9 +33,7 @@ func copyLayout(in *menuLayout, depth int32) *menuLayout {
 		V0: in.V0,
 		V1: make(map[string]dbus.Variant, len(in.V1)),
 	}
-	for k, v := range in.V1 {
-		out.V1[k] = v
-	}
+	maps.Copy(out.V1, in.V1)
 	if depth != 0 {
 		depth--
 		out.V2 = make([]dbus.Variant, len(in.V2))
@@ -73,9 +73,7 @@ func (t *tray) GetGroupProperties(ids []int32, _ []string) (properties []struct 
 				V0: m.V0,
 				V1: make(map[string]dbus.Variant, len(m.V1)),
 			}
-			for k, v := range m.V1 {
-				p.V1[k] = v
-			}
+			maps.Copy(p.V1, m.V1)
 			properties = append(properties, p)
 		}
 	}
@@ -257,7 +255,7 @@ func removeSubLayout(id int32, vals []dbus.Variant) ([]dbus.Variant, bool) {
 	for idx, i := range vals {
 		item := i.Value().(*menuLayout)
 		if item.V0 == id {
-			return append(vals[:idx], vals[idx+1:]...), true
+			return slices.Delete(vals, idx, idx+1), true
 		}
 
 		if len(item.V2) > 0 {
@@ -309,33 +307,26 @@ func showMenuItem(item *MenuItem) {
 	}
 }
 
-var delay = 5 * time.Millisecond // delay before real refresh
-var change = make(chan struct{}, 100)
-var initialize sync.Once
-
-// refresh is always called after instance.menuLock.Lock().
 func refresh() {
-	if instance.conn == nil || instance.menuProps == nil {
-		return
+	select { // try to store refresh event
+	case refreshCh <- struct{}{}:
+	default: // skip it if one refresh event is already queued
 	}
-	initialize.Do(func() {
-		go func() {
-			timer := time.NewTimer(time.Hour)
-			timer.Stop()
-			for {
-				select {
-				case <-change:
-					timer.Reset(delay)
-				case <-timer.C:
-					timer.Stop()
-					doRefresh()
-				case <-quitChan:
-					return
-				}
-			}
-		}()
-	})
-	change <- struct{}{}
+}
+
+func refresher() {
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	for {
+		select {
+		case <-refreshCh:
+			timer.Reset(refreshDelay)
+		case <-timer.C:
+			doRefresh()
+		case <-quitChan:
+			return
+		}
+	}
 }
 
 func doRefresh() {

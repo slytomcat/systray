@@ -43,7 +43,7 @@ func onReady() {
 		mChange := systray.AddMenuItem("Change Me", "Change Me")
 		mChecked := systray.AddMenuItemCheckbox("Checked", "Check Me", true)
 		mEnabled := systray.AddMenuItem("Enabled", "Enabled")
-		// Sets the icon of a menu item. Only available on Mac.
+		// Sets the icon of a menu item. Only available on Mac and Linux.
 		mEnabled.SetTemplateIcon(icon.Data, icon.Data)
 
 		systray.AddMenuItem("Ignored", "Ignored")

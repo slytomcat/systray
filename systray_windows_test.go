@@ -3,7 +3,7 @@
 package systray
 
 import (
-	"io/ioutil"
+	"os"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -18,7 +18,6 @@ const iconFilePath = "example/icon/iconwin.ico"
 func TestBaseWindowsTray(t *testing.T) {
 	systrayReady = func() {}
 	systrayExit = func() {}
-	systrayExitCalled = false
 
 	runtime.LockOSThread()
 
@@ -43,39 +42,39 @@ func TestBaseWindowsTray(t *testing.T) {
 		t.Errorf("SetIcon failed: %s", err)
 	}
 
-	var id atomic.Int32
-	err := wt.addOrUpdateMenuItem(id.Add(1), "Simple enabled", false, false)
+	var id atomic.Uint32
+	err := wt.addOrUpdateMenuItem(id.Add(1), 0, "Simple enabled", false, false)
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
-	err = wt.addOrUpdateMenuItem(id.Add(1), "Simple disabled", true, false)
+	err = wt.addOrUpdateMenuItem(id.Add(1), 0, "Simple disabled", true, false)
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
-	err = wt.addSeparatorMenuItem(id.Add(1))
+	err = wt.addSeparatorMenuItem(id.Add(1), 0)
 	if err != nil {
 		t.Errorf("addSeparatorMenuItem failed: %s", err)
 	}
-	err = wt.addOrUpdateMenuItem(id.Add(1), "Simple checked enabled", false, true)
+	err = wt.addOrUpdateMenuItem(id.Add(1), 0, "Simple checked enabled", false, true)
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
-	err = wt.addOrUpdateMenuItem(id.Add(1), "Simple checked disabled", true, true)
+	err = wt.addOrUpdateMenuItem(id.Add(1), 0, "Simple checked disabled", true, true)
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
 
-	err = wt.hideMenuItem(1)
+	err = wt.hideMenuItem(1, 0)
 	if err != nil {
 		t.Errorf("hideMenuItem failed: %s", err)
 	}
 
-	err = wt.hideMenuItem(100)
+	err = wt.hideMenuItem(100, 0)
 	if err == nil {
 		t.Error("hideMenuItem failed: must return error on invalid item id")
 	}
 
-	err = wt.addOrUpdateMenuItem(2, "Simple disabled update", true, false)
+	err = wt.addOrUpdateMenuItem(2, 0, "Simple disabled update", true, false)
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
@@ -106,7 +105,7 @@ func TestBaseWindowsTray(t *testing.T) {
 
 func TestWindowsRun(t *testing.T) {
 	onReady := func() {
-		b, err := ioutil.ReadFile(iconFilePath)
+		b, err := os.ReadFile(iconFilePath)
 		if err != nil {
 			t.Fatalf("Can't load icon file: %v", err)
 		}
@@ -119,7 +118,7 @@ func TestWindowsRun(t *testing.T) {
 		bQuit := AddMenuItem("Quit", "Quit the whole app")
 		go func() {
 			<-bQuit.ClickedCh
-			t.Log("Quit reqested")
+			t.Log("Quit requested")
 			Quit()
 		}()
 		time.AfterFunc(1*time.Second, Quit)

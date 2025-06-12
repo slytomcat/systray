@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -34,6 +35,12 @@ var (
 
 	// instance is the current instance of our DBus tray server
 	instance = &tray{menu: &menuLayout{}, menuVersion: 1}
+
+	// delay before real refresh of menu
+	refreshDelay = 5 * time.Millisecond
+
+	// refresh event chanel
+	refreshCh = make(chan struct{}, 0) // there is no need to store more one event
 )
 
 // SetTemplateIcon sets the systray icon as a template icon (on macOS), falling back
@@ -234,6 +241,7 @@ func nativeStart() {
 	instance.menuProps = menuProps
 	instance.lock.Unlock()
 
+	go refresher() // start menu version updater
 	go stayRegistered()
 }
 
@@ -300,7 +308,7 @@ type tray struct {
 
 	lock             sync.Mutex
 	menu             *menuLayout
-	menuLock         sync.RWMutex
+	menuLock         sync.Mutex
 	props, menuProps *prop.Properties
 	menuVersion      uint32
 }
@@ -309,7 +317,11 @@ func (t *tray) createPropSpec() map[string]map[string]*prop.Prop {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	if t.id == "" {
-		t.id = fmt.Sprintf("systray_%d", os.Getpid())
+		if t.title != "" {
+			t.id = t.title
+		} else {
+			t.id = fmt.Sprintf("systray_%d", os.Getpid())
+		}
 	}
 	return map[string]map[string]*prop.Prop{
 		"org.kde.StatusNotifierItem": {
