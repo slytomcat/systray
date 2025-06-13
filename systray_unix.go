@@ -20,6 +20,7 @@ import (
 	"github.com/godbus/dbus/v5/introspect"
 	"github.com/godbus/dbus/v5/prop"
 
+	"github.com/slytomcat/systray/consolidate"
 	"github.com/slytomcat/systray/internal/generated/menu"
 	"github.com/slytomcat/systray/internal/generated/notifier"
 )
@@ -27,6 +28,13 @@ import (
 const (
 	path     = "/StatusNotifierItem"
 	menuPath = "/StatusNotifierMenu"
+
+	// Delay before real refresh of menu, each refresh delays the sending of new menu version on 5 ms.
+	// The menu version update will be send in 5 ms after the last refresh in the series of menu changes.
+	refreshDelay = 5 * time.Millisecond
+
+	// Maximal delay from last update in case of frequently updated menu.
+	refreshMaxDelay = 20 * time.Millisecond
 )
 
 var (
@@ -34,13 +42,7 @@ var (
 	quitChan = make(chan struct{})
 
 	// instance is the current instance of our DBus tray server
-	instance = &tray{menu: &menuLayout{}, menuVersion: 1}
-
-	// delay before real refresh of menu
-	refreshDelay = 5 * time.Millisecond
-
-	// refresh event chanel
-	refreshCh = make(chan struct{}, 0) // there is no need to store more one event
+	instance = &tray{menu: &menuLayout{}, menuVersion: 1, refreshMenu: func() {}, stop: func() {}}
 )
 
 // SetTemplateIcon sets the systray icon as a template icon (on macOS), falling back
@@ -165,6 +167,7 @@ func nativeLoop() int {
 
 func nativeEnd() {
 	runSystrayExit()
+	instance.stop()
 	instance.conn.Close()
 }
 
@@ -235,13 +238,15 @@ func nativeStart() {
 		return
 	}
 
+	refresh, cancel := consolidate.Func(refreshDelay, refreshMaxDelay, doRefresh)
 	instance.lock.Lock()
 	instance.conn = conn
 	instance.props = props
 	instance.menuProps = menuProps
+	instance.refreshMenu = refresh
+	instance.stop = cancel
 	instance.lock.Unlock()
 
-	go refresher() // start menu version updater
 	go stayRegistered()
 }
 
@@ -310,6 +315,8 @@ type tray struct {
 	menu             *menuLayout
 	menuLock         sync.Mutex
 	props, menuProps *prop.Properties
+	refreshMenu      func()
+	stop             func()
 	menuVersion      uint32
 }
 

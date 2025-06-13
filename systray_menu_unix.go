@@ -5,7 +5,6 @@ package systray
 import (
 	"log"
 	"maps"
-	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
@@ -23,7 +22,7 @@ func (item *MenuItem) SetIcon(iconBytes []byte) {
 	m, exists := findLayout(int32(item.id))
 	if exists {
 		m.V1["icon-data"] = dbus.MakeVariant(iconBytes)
-		refresh()
+		instance.refreshMenu()
 	}
 }
 
@@ -191,7 +190,7 @@ func addOrUpdateMenuItem(item *MenuItem) {
 	}
 
 	applyItemToLayout(item, layout)
-	refresh()
+	instance.refreshMenu()
 }
 
 func addSeparator(id uint32, parent uint32) {
@@ -206,7 +205,7 @@ func addSeparator(id uint32, parent uint32) {
 		V2: []dbus.Variant{},
 	}
 	menu.V2 = append(menu.V2, dbus.MakeVariant(layout))
-	refresh()
+	instance.refreshMenu()
 }
 
 func applyItemToLayout(in *MenuItem, out *menuLayout) {
@@ -283,7 +282,7 @@ func removeMenuItem(item *MenuItem) {
 
 	if items, removed := removeSubLayout(int32(item.id), parent.V2); removed {
 		parent.V2 = items
-		refresh()
+		instance.refreshMenu()
 	}
 }
 
@@ -293,7 +292,7 @@ func hideMenuItem(item *MenuItem) {
 	m, exists := findLayout(int32(item.id))
 	if exists {
 		m.V1["visible"] = dbus.MakeVariant(false)
-		refresh()
+		instance.refreshMenu()
 	}
 }
 
@@ -303,35 +302,13 @@ func showMenuItem(item *MenuItem) {
 	m, exists := findLayout(int32(item.id))
 	if exists {
 		m.V1["visible"] = dbus.MakeVariant(true)
-		refresh()
-	}
-}
-
-func refresh() {
-	select { // try to store refresh event
-	case refreshCh <- struct{}{}:
-	default: // skip it if one refresh event is already queued
-	}
-}
-
-func refresher() {
-	timer := time.NewTimer(time.Hour)
-	timer.Stop()
-	for {
-		select {
-		case <-refreshCh:
-			timer.Reset(refreshDelay)
-		case <-timer.C:
-			doRefresh()
-		case <-quitChan:
-			return
-		}
+		instance.refreshMenu()
 	}
 }
 
 func doRefresh() {
 	// as doRefresh is executed in separate goroutine it have to lock instance.menuLock
-	instance.menuLock.Lock()
+	instance.menuLock.Lock() // lock of instance.menuLock
 	defer instance.menuLock.Unlock()
 	instance.menuVersion++
 	dbusErr := instance.menuProps.Set("com.canonical.dbusmenu", "Version",
@@ -355,5 +332,5 @@ func resetMenu() {
 	instance.menuLock.Lock()
 	defer instance.menuLock.Unlock()
 	instance.menu = &menuLayout{}
-	refresh()
+	instance.refreshMenu()
 }

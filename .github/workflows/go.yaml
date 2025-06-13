@@ -3,9 +3,6 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
 jobs:
   build_and_upload:
     runs-on: ubuntu-latest
@@ -23,4 +20,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TOKEN }}
         run: |
-          gh release create "$(git branch --show-current)-$(git rev-parse --short HEAD)" example/example
+          gh release create "$(git branch --show-current)-$(git rev-parse --short=8 HEAD)" example/example
