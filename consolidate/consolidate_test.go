@@ -12,14 +12,16 @@ const (
 	maxInterval = 5 * minInterval
 )
 
-var tCases = []struct {
+type testCase struct {
 	name             string
 	refreshSeq       int
 	seqInterval      time.Duration
 	seqCount         int
 	expectedMaxDelay time.Duration
 	expectedCount    int
-}{
+}
+
+var tCases = []testCase{
 	{
 		name:             "low",
 		refreshSeq:       5,
@@ -99,10 +101,41 @@ func receive(ch chan struct{}) func() bool {
 func TestEventGenerator(t *testing.T) {
 	res := make(chan struct{}, 50)
 	defer eventGenerator(100*time.Millisecond, 1, 3, func() { res <- struct{}{} })()
-	for range 3 {
+	assert.Eventually(t, receive(res), 30*time.Millisecond, 2*time.Millisecond)
+	for range 2 {
 		assert.Eventually(t, receive(res), 130*time.Millisecond, 5*time.Millisecond)
 	}
 	assert.Never(t, receive(res), 120*time.Millisecond, 5*time.Millisecond)
+}
+
+func testSequence(t *testing.T, result chan struct{}, tc testCase) {
+	start := time.Now()
+	<-result
+	elapsed := time.Since(start)
+	assert.LessOrEqual(t, elapsed, tc.expectedMaxDelay)
+	if tc.expectedCount > 0 {
+		for i := range tc.expectedCount - 1 {
+			assert.Eventually(t, receive(result), tc.seqInterval+tc.expectedMaxDelay, 5*time.Millisecond, i)
+		}
+		assert.Never(t, receive(result), tc.seqInterval+tc.expectedMaxDelay, 5*time.Millisecond)
+	}
+}
+
+func TestNewConsolidator(t *testing.T) {
+	result := make(chan struct{}, 100)
+	cFunc := func() { result <- struct{}{} }
+	c := newConsolidator(minInterval, maxInterval, cFunc)
+	defer c.close()
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer eventGenerator(tc.seqInterval, tc.refreshSeq, tc.seqCount, c.eventFunc)()
+			testSequence(t, result, tc)
+		})
+	}
+	t.Run("multi_close", func(t *testing.T) {
+		assert.NotPanics(t, c.close)
+		assert.NotPanics(t, c.close)
+	})
 }
 
 func TestConsolidateFunc(t *testing.T) {
@@ -113,16 +146,7 @@ func TestConsolidateFunc(t *testing.T) {
 	for _, tc := range tCases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer eventGenerator(tc.seqInterval, tc.refreshSeq, tc.seqCount, origFunc)()
-			start := time.Now()
-			<-result
-			elapsed := time.Since(start)
-			assert.LessOrEqual(t, elapsed, tc.expectedMaxDelay)
-			if tc.expectedCount > 0 {
-				for i := range tc.expectedCount - 1 {
-					assert.Eventually(t, receive(result), tc.seqInterval+tc.expectedMaxDelay, 5*time.Millisecond, i)
-				}
-				assert.Never(t, receive(result), tc.seqInterval+tc.expectedMaxDelay, 5*time.Millisecond)
-			}
+			testSequence(t, result, tc)
 		})
 	}
 }
@@ -139,16 +163,7 @@ func TestConsolidateChan(t *testing.T) {
 				default:
 				}
 			})()
-			start := time.Now()
-			<-result
-			elapsed := time.Since(start)
-			assert.LessOrEqual(t, elapsed, tc.expectedMaxDelay)
-			if tc.expectedCount > 0 {
-				for i := range tc.expectedCount - 1 {
-					assert.Eventually(t, receive(result), tc.seqInterval+tc.expectedMaxDelay, 5*time.Millisecond, i)
-				}
-				assert.Never(t, receive(result), tc.seqInterval+tc.expectedMaxDelay, 5*time.Millisecond)
-			}
+			testSequence(t, result, tc)
 		})
 	}
 }
